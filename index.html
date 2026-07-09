@@ -80,7 +80,7 @@
             position: relative;
             z-index: 1;
             width: 100%;
-            max-width: 720px;
+            max-width: 1000px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -99,10 +99,10 @@
 
         .laptop-screen {
             position: absolute;
-            left: 2.8%;
-            top: 2.8%;
-            width: 95.4%;
-            height: 64%;
+            left: 4.9%;
+            top: 7.9%;
+            width: 90.2%;
+            height: 76.5%;
             overflow: hidden;
             border-radius: 5px;
             background: #000;
@@ -617,6 +617,34 @@
             border-radius: 3px;
         }
 
+        /* Audio unmute button overlay */
+        .audio-unmute-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 25;
+            flex-direction: column;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .audio-unmute-overlay.show {
+            display: flex;
+        }
+
+        .audio-unmute-overlay .unmute-icon {
+            font-size: 48px;
+            opacity: 0.8;
+        }
+
+        .audio-unmute-overlay .unmute-text {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
         @media (max-width: 1024px) {
             .sidebar {
                 width: 300px;
@@ -737,12 +765,17 @@
             <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()">☰</button>
             <div class="laptop-wrap">
                 <div class="laptop">
-                    <img src="dell-monitor.png" alt="Monitor">
+                    <img src="smart_tv.png" alt="Monitor">
                     <div class="laptop-screen">
                         <div class="error-overlay" id="errorOverlay">
                             <div class="err-icon">📡</div>
                             <div class="err-text" id="errorText">Stream unavailable</div><button class="retry-btn"
                                 onclick="retryCurrent()">Retry Channel</button>
+                        </div>
+                        <!-- Audio unmute overlay for autoplay policy -->
+                        <div class="audio-unmute-overlay" id="audioUnmuteOverlay" onclick="unmuteAudio()">
+                            <div class="unmute-icon">🔇</div>
+                            <div class="unmute-text">Click to enable audio</div>
                         </div>
                         <video id="iptv-player" class="video-js vjs-default-skin" controls autoplay playsinline
                             preload="auto" crossorigin="anonymous"></video>
@@ -797,6 +830,8 @@
         let searchQuery = "";
         let sidebarOpen = false;
         let wasPortraitBeforeFullscreen = false;
+        let hlsInstance = null;
+        let audioMutedByPolicy = false;
 
         function parseM3U(text) {
             const channels = [];
@@ -884,6 +919,13 @@
             if (first && !currentChannel) setTimeout(function () { playChannel(first); }, 300);
         }
 
+        function cleanupHls() {
+            if (hlsInstance) {
+                hlsInstance.destroy();
+                hlsInstance = null;
+            }
+        }
+
         function initPlayer() {
             player = videojs("iptv-player", {
                 html5: {
@@ -894,7 +936,6 @@
                         handlePartialData: true,
                         allowSeeksWithinUnsafeLiveWindow: true,
                         smoothQualityChange: true,
-                        // Buffer optimization for IPTV
                         maxBufferLength: 30,
                         maxMaxBufferLength: 60,
                         liveSyncDurationCount: 3,
@@ -906,11 +947,8 @@
                         nudgeMaxRetry: 5,
                         maxFragLookUpTolerance: 0.25,
                         liveDurationInfinity: true,
-                        // Backoff settings
                         backBufferLength: 30,
-                        // Quality selection
                         experimentalBufferBasedABR: true,
-                        // Reduce startup delay
                         overrideNative: true
                     },
                     nativeAudioTracks: false,
@@ -919,17 +957,40 @@
                 autoplay: true, fluid: false, fill: true,
                 controlBar: { children: ["playToggle", "volumePanel", "currentTimeDisplay", "timeDivider", "durationDisplay", "progressControl", "liveDisplay", "seekToLive", "remainingTimeDisplay", "customControlSpacer", "playbackRateMenuButton", "chaptersButton", "subsCapsButton", "audioTrackButton", "fullscreenToggle"] }
             });
+
             player.on("fullscreenchange", function () {
                 if (player.isFullscreen()) { if (screen.orientation && screen.orientation.lock) { wasPortraitBeforeFullscreen = screen.orientation.type.includes("portrait"); screen.orientation.lock("landscape").catch(function (e) { }); } }
                 else { if (screen.orientation && screen.orientation.unlock) { screen.orientation.unlock(); if (wasPortraitBeforeFullscreen && screen.orientation.lock) screen.orientation.lock("portrait").catch(function (e) { }); } }
             });
-            // Buffer health monitoring
-            let bufferStallCount = 0;
-            let lastBufferCheck = 0;
+
+            // Handle autoplay policy - show unmute overlay if audio is blocked
+            player.on("play", function () {
+                // Check if audio is actually playing
+                setTimeout(function () {
+                    const videoEl = player.tech_ ? player.tech_.el() : document.getElementById("iptv-player");
+                    if (videoEl && videoEl.muted) {
+                        audioMutedByPolicy = true;
+                        document.getElementById("audioUnmuteOverlay").classList.add("show");
+                    }
+                }, 500);
+            });
+
+            player.on("playing", function () {
+                hideError();
+            });
 
             player.on("error", function () {
-                showError("This stream is offline or geo-blocked. Try another channel.");
-                // If Video.js fails, try HLS.js as fallback
+                const error = player.error();
+                console.log("Video.js error:", error);
+                
+                // Check if it's a mixed content error
+                if (error && error.code === 4) {
+                    showError("Mixed Content Blocked: This stream uses HTTP but your page is HTTPS. Use a proxy or serve locally.");
+                } else {
+                    showError("This stream is offline or geo-blocked. Try another channel.");
+                }
+                
+                // Fallback to HLS.js
                 if (currentChannel && typeof Hls !== "undefined" && Hls.isSupported()) {
                     console.log("Video.js failed, falling back to HLS.js");
                     playWithHlsJs(currentChannel.url);
@@ -940,34 +1001,17 @@
                 // Video.js shows its own spinner
             });
 
-            player.on("playing", function () {
-                hideError();
-                bufferStallCount = 0;
-            });
-
             player.on("loadedmetadata", function () {
-                // Video.js handles its own loading state
-            });
-
-            // Auto-recovery from stalls
-            player.on("stalled", function () {
-                bufferStallCount++;
-                console.log("Buffer stall #" + bufferStallCount);
-                if (bufferStallCount > 2 && currentChannel) {
-                    const seekable = player.seekable();
-                    if (seekable && seekable.length > 0) {
-                        player.currentTime(seekable.end(0) - 3);
-                    }
+                // Ensure audio tracks are enabled
+                const tech = player.tech({ IWillNotUseThisInPlugins: true });
+                if (tech && tech.el_) {
+                    tech.el_.muted = false;
                 }
             });
 
             // Monitor buffer health periodically
             setInterval(function () {
                 if (!player || player.paused() || player.ended()) return;
-                const now = Date.now();
-                if (now - lastBufferCheck < 2000) return;
-                lastBufferCheck = now;
-
                 const buffered = player.buffered();
                 const currentTime = player.currentTime();
                 const bufInd = document.getElementById("bufferIndicator");
@@ -988,6 +1032,55 @@
                     }
                 }
             }, 2000);
+        }
+
+        function unmuteAudio() {
+            if (player) {
+                player.muted(false);
+                player.volume(1.0);
+            }
+            const videoEl = document.getElementById("iptv-player");
+            if (videoEl) {
+                videoEl.muted = false;
+                videoEl.volume = 1.0;
+            }
+            audioMutedByPolicy = false;
+            document.getElementById("audioUnmuteOverlay").classList.remove("show");
+        }
+
+        function playWithHlsJs(url) {
+            cleanupHls();
+            const videoEl = document.getElementById("iptv-player");
+            
+            if (typeof Hls !== "undefined" && Hls.isSupported()) {
+                hlsInstance = new Hls({
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                    liveSyncDurationCount: 3,
+                    enableWorker: true,
+                    // Try to force audio
+                    defaultAudioCodec: "mp4a.40.2"
+                });
+                
+                hlsInstance.loadSource(url);
+                hlsInstance.attachMedia(videoEl);
+                
+                hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+                    videoEl.play().catch(function (e) {
+                        console.log("HLS.js autoplay blocked:", e);
+                        // Show unmute overlay
+                        audioMutedByPolicy = true;
+                        document.getElementById("audioUnmuteOverlay").classList.add("show");
+                    });
+                });
+                
+                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        console.error("HLS.js fatal error:", data);
+                        showError("Stream failed to load. " + (data.type === "networkError" ? "Network error." : "Media error."));
+                    }
+                });
+            }
         }
 
         function buildCategoryTabs() {
@@ -1078,10 +1171,31 @@
             document.getElementById("npGroup").textContent = ch.group;
             renderChannels();
             hideError();
+            
+            // Hide unmute overlay when switching channels
+            document.getElementById("audioUnmuteOverlay").classList.remove("show");
+            audioMutedByPolicy = false;
+            
+            cleanupHls();
+            
             player.pause();
             player.reset();
+            
+            // Check if URL is HTTP and page is HTTPS
+            const isHttpStream = ch.url.startsWith("http:");
+            const isHttpsPage = window.location.protocol === "https:";
+            
+            if (isHttpStream && isHttpsPage) {
+                showError("Mixed Content Blocked: This stream uses HTTP but your page is HTTPS. The browser blocks this for security. Use a proxy or serve locally.");
+                return;
+            }
+            
             player.src({ src: ch.url, type: "application/x-mpegURL" });
             player.ready(function () {
+                // Start unmuted
+                player.muted(false);
+                player.volume(1.0);
+                
                 player.play().catch(function (e) {
                     console.log("Autoplay blocked (browser policy), trying muted fallback:", e);
                     player.muted(true);
@@ -1090,6 +1204,7 @@
                     });
                 });
             });
+            
             if (window.innerWidth <= 768) closeSidebar();
             setTimeout(function () { const el = document.querySelector(".channel-item.active"); if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 100);
         }
