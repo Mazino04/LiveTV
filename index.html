@@ -291,8 +291,8 @@
 
         .sidebar {
             width: 575px;
-            min-width: 600px;
-            max-width: 450px;
+            min-width: 320px;
+            max-width: 600px;
             height: 100%;
             background: #0d0d14;
             border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -744,7 +744,7 @@
                             <div class="err-text" id="errorText">Stream unavailable</div><button class="retry-btn"
                                 onclick="retryCurrent()">Retry Channel</button>
                         </div>
-                        <video id="iptv-player" class="video-js vjs-default-skin" controls autoplay muted playsinline
+                        <video id="iptv-player" class="video-js vjs-default-skin" controls autoplay playsinline
                             preload="auto" crossorigin="anonymous"></video>
                     </div>
                 </div>
@@ -919,7 +919,7 @@
                     nativeAudioTracks: false,
                     nativeVideoTracks: false
                 },
-                autoplay: "muted", muted: true, fluid: false, fill: true,
+                autoplay: true, fluid: false, fill: true,
                 controlBar: { children: ["playToggle", "volumePanel", "currentTimeDisplay", "timeDivider", "durationDisplay", "progressControl", "liveDisplay", "seekToLive", "remainingTimeDisplay", "customControlSpacer", "playbackRateMenuButton", "chaptersButton", "subsCapsButton", "audioTrackButton", "fullscreenToggle"] }
             });
             player.on("fullscreenchange", function () {
@@ -1079,7 +1079,15 @@
             player.pause();
             player.reset();
             player.src({ src: ch.url, type: "application/x-mpegURL" });
-            player.ready(function () { player.play().catch(function (e) { console.log("Autoplay blocked:", e); }); });
+            player.ready(function () {
+                player.play().catch(function (e) {
+                    console.log("Autoplay blocked (browser policy), trying muted fallback:", e);
+                    player.muted(true);
+                    player.play().catch(function (e2) {
+                        console.log("Muted autoplay also blocked:", e2);
+                    });
+                });
+            });
             if (window.innerWidth <= 768) closeSidebar();
             setTimeout(function () { const el = document.querySelector(".channel-item.active"); if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 100);
         }
