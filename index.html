@@ -780,6 +780,7 @@
 
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
     <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
 
     <script>
@@ -928,6 +929,11 @@
 
             player.on("error", function () {
                 showError("This stream is offline or geo-blocked. Try another channel.");
+                // If Video.js fails, try HLS.js as fallback
+                if (currentChannel && typeof Hls !== "undefined" && Hls.isSupported()) {
+                    console.log("Video.js failed, falling back to HLS.js");
+                    playWithHlsJs(currentChannel.url);
+                }
             });
 
             player.on("waiting", function () {
@@ -1088,7 +1094,12 @@
             setTimeout(function () { const el = document.querySelector(".channel-item.active"); if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 100);
         }
 
-        function retryCurrent() { if (currentChannel) playChannel(currentChannel); }
+        function retryCurrent() {
+            if (currentChannel) {
+                cleanupHls();
+                playChannel(currentChannel);
+            }
+        }
         function showError(msg) { document.getElementById("errorText").textContent = msg; document.getElementById("errorOverlay").classList.add("show"); }
         function hideError() { document.getElementById("errorOverlay").classList.remove("show"); }
         function toggleSidebar() { sidebarOpen = !sidebarOpen; document.getElementById("sidebar").classList.toggle("open", sidebarOpen); document.getElementById("sidebarOverlay").classList.toggle("show", sidebarOpen); }
