@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laptop Video Display</title>
+
+<!-- Video.js CSS -->
+<link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, sans-serif; }
+
+.background {
+    width: 100%;
+    min-height: 200vh;
+    margin-top: -836px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: url("7082431.jpg") center center/cover no-repeat;
+    position: relative;
+}
+.background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.25);
+}
+
+.laptop {
+    position: relative;
+    width: 750px;
+    margin-top: 620px;
+    max-width: 100%;
+    z-index: 1;
+}
+.laptop img { width: 100%; display: block; }
+
+.laptop-screen {
+    position: absolute;
+    left: 2.5%;
+    top: 2.5%;
+    width: 96%;
+    height: 65%;
+    overflow: hidden;
+    border-radius: 6px;
+    background: #000;
+}
+
+/* Video.js fills container */
+.laptop-screen .video-js {
+    width: 100% !important;
+    height: 100% !important;
+}
+.laptop-screen .video-js video {
+    object-fit: cover;
+}
+/* Hide big play button since we autoplay */
+.vjs-big-play-button { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="background">
+    <div class="laptop">
+        <img src="dell-monitor.png" alt="Laptop">
+        <div class="laptop-screen">
+            <video
+                id="anime-player"
+                class="video-js vjs-default-skin"
+                controls
+                autoplay
+                muted
+                playsinline
+                preload="auto">
+            </video>
+        </div>
+    </div>
+</div>
+
+<!-- Video.js 8 (has VHS built-in, NO contrib-hls needed) -->
+<script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
+
+<script>
+    const player = videojs('anime-player', {
+        html5: {
+            vhs: {
+                overrideNative: true,
+                limitRenditionByPlayerDimensions: true,
+                useDevicePixelRatio: true,
+                handlePartialData: true,
+                // Try to work around codec issues
+                allowSeeksWithinUnsafeLiveWindow: true
+            },
+            nativeAudioTracks: false,
+            nativeVideoTracks: false
+        },
+        autoplay: 'muted',
+        muted: true,
+        fluid: false,
+        fill: true
+    });
+
+    player.src({
+        src: 'https://tx4.nexgen.bz:4000/TELEMUNDO/index.m3u8',
+        type: 'application/x-mpegURL'
+    });
+
+    player.ready(function() {
+        player.play().catch(function(e) {
+            console.log('Autoplay blocked:', e);
+        });
+    });
+
+    player.on('error', function() {
+        const error = player.error();
+        console.error('Video.js error:', error);
+    });
+</script>
+
+</body>
+</html>
