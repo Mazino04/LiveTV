@@ -767,18 +767,15 @@
                         stroke-linecap="round" stroke-linejoin="round">
                         <rect x="2" y="2" width="20" height="20" rx="5" />
                         <path d="M8 12h8M8 8h8M8 16h5" />
-                    </svg>Channel Guide</div>
-                <div class="m3u-input-wrap"><label>M3U Playlist URL</label><input type="text" id="m3uUrl"
-                        value="https://raw.githubusercontent.com/Mazino04/iptv/main/premium_iptv.m3u"
-                        placeholder="Enter M3U URL..."><button class="refresh-btn" id="refreshBtn"
-                        onclick="loadPlaylist()"><span>🔄</span> Reload Playlist</button></div>
+                    </svg>Channels</div>
+                <button class="refresh-btn" id="refreshBtn" onclick="loadPlaylist()"><span>🔄</span> Reload</button>
                 <div class="search-wrap"><input type="text" id="searchInput" placeholder="Search channels..."
                         oninput="searchChannels(this.value)"></div>
             </div>
             <div class="category-tabs" id="categoryTabs"><button class="tab-btn active" data-group="all"
                     onclick="filterChannels('all')">All <span class="tab-count" id="count-all">0</span></button></div>
             <div class="channel-list" id="channelList"></div>
-            <div class="sidebar-footer" id="sidebarFooter">Loading playlist...</div>
+            <div class="sidebar-footer" id="sidebarFooter">Loading...</div>
         </aside>
 
     </div>
@@ -829,9 +826,8 @@
 
         async function loadPlaylist(forceRefresh) {
             forceRefresh = forceRefresh || false;
-            const urlInput = document.getElementById("m3uUrl");
             const refreshBtn = document.getElementById("refreshBtn");
-            const m3uUrl = urlInput.value.trim() || DEFAULT_M3U_URL;
+            const m3uUrl = DEFAULT_M3U_URL;
             refreshBtn.disabled = true;
             refreshBtn.innerHTML = "<span>⏳</span> Loading...";
             document.getElementById("sidebarFooter").textContent = "Fetching playlist...";
